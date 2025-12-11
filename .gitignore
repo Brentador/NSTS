@@ -1,0 +1,14 @@
+# VS Code settings for this workspace
+.vscode/
+
+# OS specific junk
+Thumbs.db
+.DS_Store
+
+# PowerShell temporary files
+*.ps1History
+*.log
+*.tmp
+
+# output folders in your scripts
+output/

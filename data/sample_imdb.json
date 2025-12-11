@@ -1,0 +1,51 @@
+[
+  {
+    "tconst": "tt1375666",
+    "title": "Inception",
+    "year": 2010,
+    "genres": ["Action", "Adventure", "Sci-Fi"],
+    "studio": { "studio_id": "st001", "name": "Warner Bros.", "country": "USA" },
+    "directors": [
+      { "nconst": "nm0634240", "name": "Christopher Nolan" }
+    ],
+    "actors": [
+      { "nconst": "nm0000138", "name": "Leonardo DiCaprio", "role": "Cobb" },
+      { "nconst": "nm0330687", "name": "Joseph Gordon-Levitt", "role": "Arthur" },
+      { "nconst": "nm0680983", "name": "Elliot Page", "role": "Ariadne" }
+    ],
+    "rating": { "averageRating": 8.8, "numVotes": 2100000 }
+  },
+  {
+    "tconst": "tt0133093",
+    "title": "The Matrix",
+    "year": 1999,
+    "genres": ["Action", "Sci-Fi"],
+    "studio": { "studio_id": "st001", "name": "Warner Bros.", "country": "USA" },
+    "directors": [
+      { "nconst": "nm0905154", "name": "Lana Wachowski" },
+      { "nconst": "nm0905152", "name": "Lilly Wachowski" }
+    ],
+    "actors": [
+      { "nconst": "nm0000206", "name": "Keanu Reeves", "role": "Neo" },
+      { "nconst": "nm0000401", "name": "Laurence Fishburne", "role": "Morpheus" },
+      { "nconst": "nm0005251", "name": "Carrie-Anne Moss", "role": "Trinity" }
+    ],
+    "rating": { "averageRating": 8.7, "numVotes": 1700000 }
+  },
+  {
+    "tconst": "tt0109830",
+    "title": "Forrest Gump",
+    "year": 1994,
+    "genres": ["Drama", "Romance"],
+    "studio": { "studio_id": "st002", "name": "Paramount Pictures", "country": "USA" },
+    "directors": [
+      { "nconst": "nm0000226", "name": "Robert Zemeckis" }
+    ],
+    "actors": [
+      { "nconst": "nm0000158", "name": "Tom Hanks", "role": "Forrest Gump" },
+      { "nconst": "nm0000705", "name": "Robin Wright", "role": "Jenny Curran" },
+      { "nconst": "nm0000708", "name": "Gary Sinise", "role": "Lt. Dan Taylor" }
+    ],
+    "rating": { "averageRating": 8.8, "numVotes": 1900000 }
+  }
+]
