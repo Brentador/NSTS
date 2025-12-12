@@ -6,8 +6,7 @@ $jsonPath = "$PSScriptRoot\..\data\sample_imdb.json"
 $jsonData = Get-JsonContent -Path $jsonPath
 
 Write-Host "`nDetecting schema..." -ForegroundColor Yellow
-$schema = Get-JsonSchema -JsonData $jsonData -MainTableName "movies" -PrimaryKeyField "tconst"
-
+$schema = Get-JsonSchema -JsonData $jsonData
 $validatedSchema = Confirm-Schema -Schema $schema
 
 if ($null -ne $validatedSchema) {

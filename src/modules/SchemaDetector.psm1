@@ -1,21 +1,55 @@
 function Get-JsonSchema {
     param (
-        [Parameter(Mandatory)] $JsonData,
-        [Parameter(Mandatory)] $MainTableName,
-        [Parameter(Mandatory)] $PrimaryKeyField
+        [Parameter(Mandatory)] $JsonData
     )
 
     $firstRecord = $JsonData[0]
 
-    $schema = @{
-        MainTable = @{
-            Name = $MainTableName
-            PrimaryKey = $PrimaryKeyField
-            Columns = @()
+    $properties = $firstRecord.PSObject.Properties.Name
+    $PrimaryKeyField = $properties | Where-Object {
+        $_ -match '^(id|.*Id|.*_id|.*ID|.*const|pk)$'
+    } | Select-Object -First 1
+
+    if (-not $PrimaryKeyField) {
+        $PrimaryKeyField = $properties[0]
+        Write-Host "No ID field found, using first property as primary key: $PrimaryKeyField"
+    }
+    else {
+        Write-Host "Using detected primary key field: $PrimaryKeyField"
+    }
+
+    if ($PrimaryKeyField -match '^(.+?)(Id|_id|ID|const)$') {
+        $baseName = $matches[1]
+
+        if ($baseName.Length -eq 1) {
+            $MainTableName = "${baseName}_records"
         }
-        RelatedTables = @()
+        else {
+            if ($baseName -notmatch 's$') {
+                $MainTableName = "${baseName}s"
+            }
+            else {
+                $MainTableName = $baseName
+            }
+        }
+        Write-Host "Detected table name: $MainTableName" -ForegroundColor Green
+
+    }
+    else {
+        $MainTableName = "records"
+        Write-Host "Using default table name: $MainTableName" -ForegroundColor Yellow
+    }
+    $schema = @{
+        Tables         = @()
         JunctionTables = @()
     }
+
+    $baseTable = @{
+        Name       = $MainTableName
+        PrimaryKey = $PrimaryKeyField
+        Columns    = @()
+    }
+    
 
     $properties = $firstRecord.PSObject.Properties
 
@@ -27,9 +61,9 @@ function Get-JsonSchema {
 
         switch ($fieldType) {
             "SimpleValue" {
-                $schema.MainTable.Columns += @{
-                    Name = $propertyName
-                    Type = Get-SqlType -Value $value
+                $baseTable.Columns += @{
+                    Name         = $propertyName
+                    Type         = Get-SqlType -Value $value
                     IsPrimaryKey = ($propertyName -eq $PrimaryKeyField)
                 }
             }
@@ -37,21 +71,24 @@ function Get-JsonSchema {
                 $relatedTableName = $propertyName
                 $relatedPK = "${propertyName}_id"
                 
-                $schema.RelatedTables += @{
-                    TableName = $relatedTableName
-                    PrimaryKey = $relatedPK
-                    Columns = @(
-                        @{ Name = $relatedPK; Type = "INTEGER PRIMARY KEY AUTOINCREMENT" }
-                        @{ Name = "${propertyName}_name"; Type = "TEXT" }
+                $schema.Tables += @{
+                    Name         = $relatedTableName
+                    PrimaryKey   = $relatedPK
+                    RelationType = "ManyToMany"
+                    Columns      = @(
+                        @{ Name = $relatedPK; Type = "INTEGER PRIMARY KEY AUTOINCREMENT"; IsPrimaryKey = $true }
+                        @{ Name = "${propertyName}_name"; Type = "TEXT"; IsPrimaryKey = $false }
                     )
                 }
 
                 $junctionTableName = "${MainTableName}_${propertyName}"
                 $schema.JunctionTables += @{
                     TableName = $junctionTableName
-                    MainTableFK = $PrimaryKeyField
-                    RelatedTableFK = $relatedPK
-                    Columns = @(
+                    Table1    = $MainTableName
+                    Table1FK  = $PrimaryKeyField
+                    Table2    = $relatedTableName
+                    Table2FK  = $relatedPK
+                    Columns   = @(
                         @{ Name = $PrimaryKeyField; Type = Get-SqlType -Value $firstRecord.$PrimaryKeyField }
                         @{ Name = $relatedPK; Type = "INTEGER" }
                     )
@@ -63,24 +100,27 @@ function Get-JsonSchema {
                 $objectKeys = @($firstElement.PSObject.Properties.Name)
                 $relatedPK = $objectKeys[0]
                 
-                $schema.RelatedTables += @{
-                    TableName = $relatedTableName
-                    PrimaryKey = $relatedPK
-                    Columns = @($objectKeys | ForEach-Object { 
-                        @{ 
-                            Name = $_
-                            Type = Get-SqlType -Value $firstElement.$_
-                            IsPrimaryKey = ($_ -eq $relatedPK)
-                        } 
-                    })
+                $schema.Tables += @{
+                    Name         = $relatedTableName
+                    PrimaryKey   = $relatedPK
+                    RelationType = "ManyToMany"
+                    Columns      = @($objectKeys | ForEach-Object { 
+                            @{ 
+                                Name         = $_
+                                Type         = Get-SqlType -Value $firstElement.$_
+                                IsPrimaryKey = ($_ -eq $relatedPK)
+                            } 
+                        })
                 }
 
                 $junctionTableName = "${MainTableName}_${propertyName}"
                 $schema.JunctionTables += @{
                     TableName = $junctionTableName
-                    MainTableFK = $PrimaryKeyField
-                    RelatedTableFK = $relatedPK
-                    Columns = @(
+                    Table1    = $MainTableName
+                    Table1FK  = $PrimaryKeyField
+                    Table2    = $relatedTableName
+                    Table2FK  = $relatedPK
+                    Columns   = @(
                         @{ Name = $PrimaryKeyField; Type = Get-SqlType -Value $firstRecord.$PrimaryKeyField }
                         @{ Name = $relatedPK; Type = Get-SqlType -Value $firstElement.$relatedPK }
                     )
@@ -96,33 +136,34 @@ function Get-JsonSchema {
                     $relatedTableName = $propertyName
                     $relatedPK = $nestedKeys[0]
                     
-                    $schema.RelatedTables += @{
-                        TableName = $relatedTableName
-                        PrimaryKey = $relatedPK
+                    $schema.Tables += @{
+                        Name         = $relatedTableName
+                        PrimaryKey   = $relatedPK
                         RelationType = "OneToMany"
-                        Columns = @($nestedKeys | ForEach-Object {
-                            @{
-                                Name = $_
-                                Type = Get-SqlType -Value $value.$_
-                                IsPrimaryKey = ($_ -eq $relatedPK)
-                            }
-                        })
+                        Columns      = @($nestedKeys | ForEach-Object {
+                                @{
+                                    Name         = $_
+                                    Type         = Get-SqlType -Value $value.$_
+                                    IsPrimaryKey = ($_ -eq $relatedPK)
+                                }
+                            })
                     }
                     
                     $fkColumnName = "${propertyName}_id"
-                    $schema.MainTable.Columns += @{
-                        Name = $fkColumnName
-                        Type = Get-SqlType -Value $value.$relatedPK
-                        IsPrimaryKey = $false
-                        IsForeignKey = $true
-                        ReferencesTable = $relatedTableName
+                    $baseTable.Columns += @{
+                        Name             = $fkColumnName
+                        Type             = Get-SqlType -Value $value.$relatedPK
+                        IsPrimaryKey     = $false
+                        IsForeignKey     = $true
+                        ReferencesTable  = $relatedTableName
                         ReferencesColumn = $relatedPK
                     }
-                } else {
+                }
+                else {
                     foreach ($nestedProp in $nestedProperties) {
-                        $schema.MainTable.Columns += @{
-                            Name = $nestedProp.Name
-                            Type = Get-SqlType -Value $nestedProp.Value
+                        $baseTable.Columns += @{
+                            Name         = $nestedProp.Name
+                            Type         = Get-SqlType -Value $nestedProp.Value
                             IsPrimaryKey = $false
                         }
                     }
@@ -130,6 +171,7 @@ function Get-JsonSchema {
             }
         }
     }
+    $schema.Tables = @($baseTable) + $schema.Tables
     return $schema
 }
 
@@ -143,7 +185,8 @@ function Get-FieldType {
         
         if ($Value[0] -is [Hashtable] -or $Value[0] -is [PSCustomObject]) {
             return "ObjectArray"
-        } else {
+        }
+        else {
             return "SimpleArray"
         }
     }
@@ -162,12 +205,12 @@ function Get-SqlType {
     
     $type = $Value.GetType().Name
     switch ($type) {
-        "String"  { return "TEXT" }
-        "Int32"   { return "INTEGER" }
-        "Int64"   { return "INTEGER" }
-        "Double"  { return "REAL" }
+        "String" { return "TEXT" }
+        "Int32" { return "INTEGER" }
+        "Int64" { return "INTEGER" }
+        "Double" { return "REAL" }
         "Boolean" { return "INTEGER" }
-        default   { return "TEXT" }
+        default { return "TEXT" }
     }
 }
 
