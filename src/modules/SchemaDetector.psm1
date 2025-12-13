@@ -10,9 +10,11 @@ function Get-JsonSchema {
         $_ -match '^(id|.*Id|.*_id|.*ID|.*const|pk)$'
     } | Select-Object -First 1
 
+    $autoGenerateId = $false
     if (-not $PrimaryKeyField) {
-        $PrimaryKeyField = $properties[0]
-        Write-Host "No ID field found, using first property as primary key: $PrimaryKeyField"
+        $PrimaryKeyField = "id"
+        $autoGenerateId = $true
+        Write-Host "No ID field found. Generating 'id' column as primary key." -ForegroundColor Cyan
     }
     else {
         Write-Host "Using detected primary key field: $PrimaryKeyField"
@@ -36,7 +38,7 @@ function Get-JsonSchema {
 
     }
     else {
-        $MainTableName = "records"
+        $MainTableName = "[REPLACE WITH TABLE NAME]"
         Write-Host "Using default table name: $MainTableName" -ForegroundColor Yellow
     }
     $schema = @{
@@ -50,6 +52,13 @@ function Get-JsonSchema {
         Columns    = @()
     }
     
+    if ($autoGenerateId) {
+        $baseTable.Columns += @{
+            Name         = "id"
+            Type         = "INT"
+            IsPrimaryKey = $true
+        }
+    }
 
     $properties = $firstRecord.PSObject.Properties
 
@@ -64,21 +73,33 @@ function Get-JsonSchema {
                 $baseTable.Columns += @{
                     Name         = $propertyName
                     Type         = Get-SqlType -Value $value
-                    IsPrimaryKey = ($propertyName -eq $PrimaryKeyField)
+                    IsPrimaryKey = ($propertyName -eq $PrimaryKeyField) -and (-not $autoGenerateId)
                 }
             }
             "SimpleArray" {
                 $relatedTableName = $propertyName
                 $relatedPK = "${propertyName}_id"
                 
+                $elementType = if ($value.Count -gt 0) { 
+                    Get-SqlType -Value $value[0] 
+                } else { 
+                    "VARCHAR(255)" 
+                }
+                
                 $schema.Tables += @{
                     Name         = $relatedTableName
                     PrimaryKey   = $relatedPK
                     RelationType = "ManyToMany"
                     Columns      = @(
-                        @{ Name = $relatedPK; Type = "INTEGER PRIMARY KEY AUTOINCREMENT"; IsPrimaryKey = $true }
-                        @{ Name = "${propertyName}_name"; Type = "TEXT"; IsPrimaryKey = $false }
+                        @{ Name = $relatedPK; Type = "INT"; IsPrimaryKey = $true }
+                        @{ Name = "${propertyName}_value"; Type = $elementType; IsPrimaryKey = $false }
                     )
+                }
+
+                $parentPKType = if ($autoGenerateId) { 
+                    "INT" 
+                } else { 
+                    Get-SqlType -Value $firstRecord.$PrimaryKeyField 
                 }
 
                 $junctionTableName = "${MainTableName}_${propertyName}"
@@ -89,8 +110,8 @@ function Get-JsonSchema {
                     Table2    = $relatedTableName
                     Table2FK  = $relatedPK
                     Columns   = @(
-                        @{ Name = $PrimaryKeyField; Type = Get-SqlType -Value $firstRecord.$PrimaryKeyField }
-                        @{ Name = $relatedPK; Type = "INTEGER" }
+                        @{ Name = $PrimaryKeyField; Type = $parentPKType }
+                        @{ Name = $relatedPK; Type = "INT" }
                     )
                 }
             }
@@ -113,6 +134,12 @@ function Get-JsonSchema {
                         })
                 }
 
+                $parentPKType = if ($autoGenerateId) { 
+                    "INT" 
+                } else { 
+                    Get-SqlType -Value $firstRecord.$PrimaryKeyField 
+                }
+
                 $junctionTableName = "${MainTableName}_${propertyName}"
                 $schema.JunctionTables += @{
                     TableName = $junctionTableName
@@ -121,7 +148,7 @@ function Get-JsonSchema {
                     Table2    = $relatedTableName
                     Table2FK  = $relatedPK
                     Columns   = @(
-                        @{ Name = $PrimaryKeyField; Type = Get-SqlType -Value $firstRecord.$PrimaryKeyField }
+                        @{ Name = $PrimaryKeyField; Type = $parentPKType }
                         @{ Name = $relatedPK; Type = Get-SqlType -Value $firstElement.$relatedPK }
                     )
                 }
@@ -201,16 +228,21 @@ function Get-FieldType {
 function Get-SqlType {
     param ($Value)
 
-    if ($null -eq $Value) { return "TEXT" }
+    if ($null -eq $Value) { return "VARCHAR(255)" }
     
     $type = $Value.GetType().Name
     switch ($type) {
-        "String" { return "TEXT" }
-        "Int32" { return "INTEGER" }
-        "Int64" { return "INTEGER" }
-        "Double" { return "REAL" }
-        "Boolean" { return "INTEGER" }
-        default { return "TEXT" }
+        "String" { 
+            if ($Value.Length -gt 255) {
+                return "TEXT"
+            }
+            return "VARCHAR(255)" 
+        }
+        "Int32" { return "INT" }
+        "Int64" { return "INT" }
+        "Double" { return "FLOAT" }
+        "Boolean" { return "BOOLEAN" }
+        default { return "VARCHAR(255)" }
     }
 }
 

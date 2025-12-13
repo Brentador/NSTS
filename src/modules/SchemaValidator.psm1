@@ -20,8 +20,6 @@ function Show-Schema {
         Write-Host "      Columns:" -ForegroundColor DarkGray
     
         foreach ($col in $table.Columns) {
-            $pk = if ($col.IsPrimaryKey) { " <- PRIMARY KEY" } else { "" }
-            $fk = if ($col.IsForeignKey) { " -> $($col.ReferencesTable)" } else { "" }
         
             Write-Host "        - " -NoNewline -ForegroundColor DarkGray
             Write-Host "$($col.Name)" -NoNewline -ForegroundColor White
@@ -72,7 +70,6 @@ function Edit-Table {
     Write-Host "`n--- Editing $($Table.Name) ---" -ForegroundColor Cyan
 
     $oldTableName = $Table.Name
-    $oldPK = $Table.PrimaryKey
 
     $editingTable = $true
 
@@ -111,13 +108,15 @@ function Edit-Table {
                 $Table.Name = $newTableName
 
                 foreach ($junction in $JunctionTables) {
+                    if ($junction.TableName -like "*$oldTableName*") {
+                        $junction.TableName = $junction.TableName -replace [regex]::Escape($oldTableName), $newTableName
+                    }
+                    
                     if ($junction.Table1 -eq $oldTableName) {
                         $junction.Table1 = $newTableName
-                        $junction.TableName = $junction.TableName -replace "^$oldTableName", $newTableName
                     }
                     if ($junction.Table2 -eq $oldTableName) {
                         $junction.Table2 = $newTableName
-                        $junction.TableName = $junction.TableName -replace "_$oldTableName$", "_$newTableName"
                     }
                 }
 
