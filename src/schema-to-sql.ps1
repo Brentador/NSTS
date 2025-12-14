@@ -1,4 +1,7 @@
 Import-Module "$PSScriptRoot\modules\SQLConverter.psm1" -Force
+Import-Module "$PSScriptRoot\modules\Logger.psm1" -Force
+
+Initialize-Logger -LogDirectory ".\logs\schema-to-sql" -LogPrefix "schema-to-sql"
 
 Add-Type -AssemblyName System.Windows.Forms
 

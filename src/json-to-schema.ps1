@@ -2,7 +2,9 @@ Import-Module "$PSScriptRoot\modules\JsonReader.psm1" -Force
 Import-Module "$PSScriptRoot\modules\SchemaDetector.psm1" -Force
 Import-Module "$PSScriptRoot\modules\SchemaValidator.psm1" -Force
 Import-Module "$PSScriptRoot\modules\SQLConverter.psm1" -Force
+Import-Module "$PSScriptRoot\modules\Logger.psm1" -Force
 
+Initialize-Logger -LogDirectory ".\logs\json-to-schema" -LogPrefix "json-to-schema"
 
 Add-Type -AssemblyName System.Windows.Forms
 

@@ -3,6 +3,8 @@ function Get-JsonSchema {
         [Parameter(Mandatory)] $JsonData
     )
 
+    Write-Log "Starting schema detection for JSON data." -Level "INFO"
+
     $firstRecord = $JsonData[0]
 
     $properties = $firstRecord.PSObject.Properties.Name
@@ -15,9 +17,11 @@ function Get-JsonSchema {
         $PrimaryKeyField = "id"
         $autoGenerateId = $true
         Write-Host "No ID field found. Generating 'id' column as primary key." -ForegroundColor Cyan
+        Write-Log "No primary key found in JSON, generating 'id' as primary key." -Level "INFO"
     }
     else {
         Write-Host "Using detected primary key field: $PrimaryKeyField"
+        Write-Log "Detected primary key field: $PrimaryKeyField" -Level "INFO"
     }
 
     if ($PrimaryKeyField -match '^(.+?)(Id|_id|ID|const)$') {
@@ -35,11 +39,13 @@ function Get-JsonSchema {
             }
         }
         Write-Host "Detected table name: $MainTableName" -ForegroundColor Green
+        Write-Log "Detected table name: $MainTableName" -Level "INFO"
 
     }
     else {
         $MainTableName = "[REPLACE WITH TABLE NAME]"
         Write-Host "Using default table name: $MainTableName" -ForegroundColor Yellow
+        Write-Log "Using default table name placeholder." -Level "WARNING"
     }
     $schema = @{
         Tables         = @()
@@ -96,6 +102,8 @@ function Get-JsonSchema {
                     )
                 }
 
+                Write-Log "Detected simple array for property '$propertyName', creating related table '$relatedTableName'." -Level "INFO"
+
                 $parentPKType = if ($autoGenerateId) { 
                     "INT" 
                 } else { 
@@ -133,6 +141,8 @@ function Get-JsonSchema {
                             } 
                         })
                 }
+
+                Write-Log "Detected object array for property '$propertyName', creating related table '$relatedTableName'." -Level "INFO"
 
                 $parentPKType = if ($autoGenerateId) { 
                     "INT" 
@@ -185,8 +195,11 @@ function Get-JsonSchema {
                         ReferencesTable  = $relatedTableName
                         ReferencesColumn = $relatedPK
                     }
+
+                    Write-Log "Detected single object with ID for property '$propertyName', creating related table '$relatedTableName' and foreign key." -Level "INFO"
                 }
                 else {
+                    Write-Log "Detected single object without ID for property '$propertyName', flattening into base table." -Level "INFO"
                     foreach ($nestedProp in $nestedProperties) {
                         $baseTable.Columns += @{
                             Name         = $nestedProp.Name
@@ -199,6 +212,7 @@ function Get-JsonSchema {
         }
     }
     $schema.Tables = @($baseTable) + $schema.Tables
+    Write-Log "Schema detection completed with $($schema.Tables.Count) tables and $($schema.JunctionTables.Count) junction tables." -Level "INFO"
     return $schema
 }
 
@@ -232,17 +246,21 @@ function Get-SqlType {
     
     $type = $Value.GetType().Name
     switch ($type) {
-        "String" { 
+        "String" {
             if ($Value.Length -gt 255) {
                 return "TEXT"
             }
-            return "VARCHAR(255)" 
+            return "VARCHAR(255)"
         }
         "Int32" { return "INT" }
         "Int64" { return "INT" }
         "Double" { return "FLOAT" }
         "Boolean" { return "BOOLEAN" }
-        default { return "VARCHAR(255)" }
+        "DateTime" { return "DATETIME" }
+        default { 
+            Write-Log "Unknown type '$type' detected, defaulting to VARCHAR(255)." -Level "WARNING"
+            return "VARCHAR(255)" 
+        }
     }
 }
 

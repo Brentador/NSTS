@@ -61,12 +61,16 @@ function Edit-Table {
     param (
         [Parameter(Mandatory)]
         [hashtable]$Table,
-        [Parameter(Mandatory)]
         [array]$JunctionTables,
         [Parameter(Mandatory)]
         [array]$AllTables
     )
 
+    if (-not $JunctionTables) {
+        $JunctionTables = @()
+    }
+
+    Write-Log "Started editing table: $($Table.Name)" -Level "INFO"
     Write-Host "`n--- Editing $($Table.Name) ---" -ForegroundColor Cyan
 
     $oldTableName = $Table.Name
@@ -86,6 +90,8 @@ function Edit-Table {
             Write-Host "  [$($i + 2)] Column: $($col.Name) ($($col.Type))$pk$fk" -ForegroundColor White
         }
 
+        Write-Host "  [A] Add column" -ForegroundColor Yellow
+        Write-Host "  [R] Remove column" -ForegroundColor Yellow
         Write-Host "  [D] Done editing this table" -ForegroundColor Green
 
         $choice = Read-Host "`nYour choice"
@@ -94,9 +100,72 @@ function Edit-Table {
             $editingTable = $false
             continue
         }
+        if ($choice -eq "A" -or $choice -eq "a") {
+            $newColName = Read-Host "Enter new column name"
+            if ($newColName) {
+                $validTypes = @(
+                    "TINYINT", "SMALLINT", "MEDIUMINT", "INT", "INTEGER", "BIGINT", 
+                    "DECIMAL", "DEC", "NUMERIC", "FIXED", "FLOAT", "DOUBLE", 
+                    "DOUBLE PRECISION", "REAL", "BIT", "BOOL", "BOOLEAN", 
+                    "DATE", "TIME", "DATETIME", "TIMESTAMP", "YEAR", 
+                    "CHAR", "VARCHAR", "TINYTEXT", "TEXT", "MEDIUMTEXT", "LONGTEXT", 
+                    "BINARY", "VARBINARY", "TINYBLOB", "BLOB", "MEDIUMBLOB", "LONGBLOB", 
+                    "ENUM", "SET", "GEOMETRY", "POINT", "LINESTRING", "POLYGON", 
+                    "MULTIPOINT", "MULTILINESTRING", "MULTIPOLYGON", "GEOMETRYCOLLECTION", 
+                    "JSON"
+                )
+                Write-Host "Select a valid dataType from the list: " -ForegroundColor Cyan
+                Write-Host "TINYINT, SMALLINT, MEDIUMINT, INT, INTEGER, BIGINT, DECIMAL, DEC, NUMERIC, FIXED, FLOAT, DOUBLE, DOUBLE PRECISION, REAL, BIT, BOOL, BOOLEAN, DATE, TIME, DATETIME, TIMESTAMP, YEAR" -ForegroundColor Magenta
+                Write-Host "CHAR, VARCHAR, TINYTEXT, TEXT, MEDIUMTEXT, LONGTEXT, BINARY, VARBINARY, TINYBLOB, BLOB, MEDIUMBLOB, LONGBLOB, ENUM, SET" -ForegroundColor Green
+                Write-Host "GEOMETRY, POINT, LINESTRING, POLYGON, MULTIPOINT, MULTILINESTRING, MULTIPOLYGON, GEOMETRYCOLLECTION, JSON" -ForegroundColor DarkBlue
+                $newColType = Read-Host "Enter data type for $newColName [VARCHAR(255)]"
+                if (-not $newColType) { $newColType = "VARCHAR(255)" }
+                $baseType = if ($newColType -match '^(\w+)(\(.*\))?$') { 
+                    $matches[1].ToUpper() 
+                } else { 
+                    $newColType.ToUpper() 
+                }
 
-        if ($choice -notmatch '^\d+$') {
-            Write-Host "Invalid choice. Please enter a valid number or 'D' to finish." -ForegroundColor Red
+                if ($validTypes -contains $baseType) {
+                    $Table.Columns += @{ Name = $newColName; Type = $newColType.ToUpper(); IsPrimaryKey = $false }
+                    Write-Host "Column added!" -ForegroundColor Green
+                    Write-Log "Added column '$newColName' of type '$newColType' to table '$($Table.Name)'." -Level "INFO"
+                } else {
+                    Write-Host "Invalid data type. Column not added." -ForegroundColor Red
+                    Write-Log "Failed to add column '$newColName': invalid type '$newColType'." -Level "WARNING"
+                }
+            }
+            continue
+        }
+
+        if ($choice -eq "R" -or $choice -eq "r") {
+            Write-Host "$($Table.Columns.Count)"
+            $columnNum = Read-Host "Enter column number to remove"
+            $columnNum = [int]$columnNum
+            if ($columnNum -ge 3 -and $columnNum -le $Table.Columns.Count +1) {
+                $actualIndex = $columnNum - 2
+                if($Table.Columns[$actualIndex].IsPrimaryKey) {
+                    Write-Host "Cannot delete the primary key column." -ForegroundColor Red
+                } else {
+                    $Table.Columns = @(
+                        for ($i = 0; $i -lt $Table.Columns.Count; $i++) {
+                            if ($i -ne $actualIndex) {
+                                $Table.Columns[$i]
+                            }
+                        }
+                    )
+                    Write-Host "Column deleted!" -ForegroundColor Green
+                    Write-Host "$($Table.Columns.Count)"
+                    Write-Log "Deleted column from table '$($Table.Name)'." -Level "INFO"
+                }
+            } else {
+                Write-Host "Enter a valid column number." -ForegroundColor Red
+            }
+            continue
+        }
+
+        if ($choice -notmatch '^[ARDard]$' -and $choice -notmatch '^\d+$') {
+            Write-Host "Invalid choice. Please enter a valid number, 'A' to add, 'R' to remove or 'D' to finish." -ForegroundColor Red
             continue
         }
 
@@ -132,6 +201,7 @@ function Edit-Table {
 
                 $oldTableName = $newTableName
                 Write-Host "Table name updated to $newTableName" -ForegroundColor Green
+                Write-Log "Updated table name from '$oldTableName' to '$newTableName'." -Level "INFO"
             }
         }
         elseif ($choiceNum -eq 1) {
@@ -177,6 +247,7 @@ function Edit-Table {
                 }
                 
                 Write-Host "Primary key changed to: $($newPKCol.Name)" -ForegroundColor Green
+                Write-Log "Changed primary key to '$($newPKCol.Name)' in table '$($Table.Name)'." -Level "INFO"
             }
 
         }
@@ -190,7 +261,6 @@ function Edit-Table {
                 $oldColName = $col.Name
                 if ($col.IsPrimaryKey) {
                     $Table.PrimaryKey = $newColName
-                    
                     foreach ($junction in $JunctionTables) {
                         if ($junction.Table1 -eq $Table.Name -and $junction.Table1FK -eq $oldColName) {
                             $junction.Table1FK = $newColName
@@ -203,7 +273,6 @@ function Edit-Table {
                             if ($junctionCol) { $junctionCol.Name = $newColName }
                         }
                     }
-                    
                     foreach ($otherTable in $AllTables) {
                         if ($otherTable.Name -ne $Table.Name) {
                             foreach ($fkCol in $otherTable.Columns) {
@@ -216,12 +285,12 @@ function Edit-Table {
                 }
                 $col.Name = $newColName
                 Write-Host "Column name updated!" -ForegroundColor Green
+                Write-Log "Updated column name to '$newColName' in table '$($Table.Name)'." -Level "INFO"
             }
 
             $newColType = Read-Host "New data type [$($col.Type)]"
             if ($newColType) {
                 $col.Type = $newColType
-    
                 if ($col.IsPrimaryKey) {
                     foreach ($junction in $JunctionTables) {
                         if ($junction.Table1 -eq $Table.Name -and $junction.Table1FK -eq $col.Name) {
@@ -242,6 +311,7 @@ function Edit-Table {
                 }
     
                 Write-Host "Column type updated!" -ForegroundColor Green
+                Write-Log "Updated column type to '$newColType' for '$($col.Name)' in table '$($Table.Name)'." -Level "INFO"
             }
         }
         else {
@@ -276,9 +346,10 @@ function Edit-Schema {
                 else {
                     $tableNum = Read-Host "Which table? (0-$($Schema.Tables.Count - 1))"
                     if ($tableNum -match '^\d+$' -and [int]$tableNum -lt $Schema.Tables.Count) {
+                        $junctionTables = if ($Schema.JunctionTables) { $Schema.JunctionTables } else { @() }
                         $Schema.Tables[[int]$tableNum] = Edit-Table `
                             -Table $Schema.Tables[[int]$tableNum] `
-                            -JunctionTables $Schema.JunctionTables `
+                            -JunctionTables $junctionTables `
                             -AllTables $Schema.Tables
                     }
                     else {
@@ -316,6 +387,7 @@ function Confirm-Schema {
     switch ($choice.ToUpper()) {
         "A" { 
             Write-Host "`nSchema accepted!" -ForegroundColor Green
+            Write-Log "Schema accepted and confirmed." -Level "INFO"
             return $Schema 
         }
         "E" { 
@@ -324,6 +396,7 @@ function Confirm-Schema {
         }
         "Q" { 
             Write-Host "`nExiting without saving..." -ForegroundColor Red
+            Write-Log "Schema editing exited without saving." -Level "WARNING"
             return $null 
         }
         default { 
@@ -342,6 +415,9 @@ function Save-SchemaToFile {
         [string]$OutputPath
     )
     
+    Write-Log "Preparing to save schema with $($Schema.Tables.Count) tables and $($Schema.JunctionTables.Count) junction tables" -Level "INFO"
+
+    
     $schemaWithMetadata = @{
         schema        = $Schema
         validated     = $true
@@ -353,6 +429,7 @@ function Save-SchemaToFile {
     $json | Out-File -FilePath $OutputPath -Encoding UTF8
     
     Write-Host "`nSchema saved to: $OutputPath" -ForegroundColor Green
+    Write-Log "Schema saved to file: $OutputPath" -Level "INFO"
 }
 
 Export-ModuleMember -Function Show-Schema, Confirm-Schema, Save-SchemaToFile

@@ -3,6 +3,7 @@ function ConvertTo-SqlStatements {
         [Parameter(Mandatory = $true)]$Schema
     )
     
+    Write-Log "Starting SQL conversion for schema with $($Schema.Tables.Count) tables and $($Schema.JunctionTables.Count) junction tables." -Level "INFO"
     $sqlStatements = @()
     
     foreach ($table in $Schema.Tables) {
@@ -23,6 +24,7 @@ function ConvertTo-SqlStatements {
         $createTable += "`n);"
         
         $sqlStatements += $createTable
+        Write-Log "Generated CREATE TABLE statement for '$($table.Name)'." -Level "INFO"
     }
     
     foreach ($junction in $Schema.JunctionTables) {
@@ -43,8 +45,10 @@ function ConvertTo-SqlStatements {
         $createTable += "`n);"
         
         $sqlStatements += $createTable
+        Write-Log "Generated CREATE TABLE statement for junction table '$($junction.TableName)'." -Level "INFO"
     }
     
+    Write-Log "SQL conversion completed, generated $($sqlStatements.Count) statements." -Level "INFO"
     return $sqlStatements
 }
 
