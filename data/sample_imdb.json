@@ -38,6 +38,23 @@
       9,
       10
     ],
+    "reviews": [
+      {
+        "reviewer": "John Doe",
+        "rating": 9,
+        "comment": "An inspiring story of hope and friendship."
+      },
+      {
+        "reviewer": "Jane Smith",
+        "rating": 10,
+        "comment": "Timeless classic, must-watch."
+      },
+      {
+        "reviewer": "Bob Johnson",
+        "rating": 8,
+        "comment": "Great performances, but a bit slow."
+      }
+    ],
     "poster": "MV5BODU4MjU4NjIwNl5BMl5BanBnXkFtZTgwMDU2MjEyMDE@._V1_SY500_CR0,0,336,500_AL_.jpg",
     "contentRating": "15",
     "duration": "PT142M",

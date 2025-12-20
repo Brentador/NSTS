@@ -52,4 +52,3 @@ function ConvertTo-SqlStatements {
     return $sqlStatements
 }
 
-Export-ModuleMember -Function ConvertTo-SqlStatements
