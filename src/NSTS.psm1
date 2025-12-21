@@ -57,6 +57,17 @@ function JsonToSchema {
     }
 }
 
+#test function
+function JsonToSchemaFromObject {
+    param (
+        [Parameter(Mandatory)]
+        $JsonData,
+        [hashtable]$RelationshipOverrides = @{}
+    )
+    $schema = Get-JsonSchema -JsonData $JsonData -RelationshipOverrides $RelationshipOverrides
+    return $schema
+}
+
 # Schema to SQL
 function SchemaToSql {
     Initialize-Logger -LogDirectory ".\logs\schema-to-sql" -LogPrefix "schema-to-sql"
@@ -95,6 +106,16 @@ function SchemaToSql {
     }
 }
 
+function SchemaToSqlFromObject {
+    param (
+        [Parameter(Mandatory)]
+        $Schema
+    )
+    
+    $sqlStatements = ConvertTo-SqlStatements -Schema $Schema
+    return $sqlStatements
+}
+
 function Show-Menu {
     Clear-Host
     Write-Host ""
@@ -108,4 +129,4 @@ function Show-Menu {
     Write-Host ""
 }
 
-Export-ModuleMember -Function Show-Menu, Open-File, Save-File, JsonToSchema, SchemaToSql
+Export-ModuleMember -Function Show-Menu, Open-File, Save-File, JsonToSchema, SchemaToSql, Initialize-Logger, Write-Log, JsonToSchemaFromObject, SchemaToSqlFromObject
