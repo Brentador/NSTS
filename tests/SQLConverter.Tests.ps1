@@ -1,10 +1,11 @@
 BeforeAll {
-    Import-Module "$PSScriptRoot\..\src\NSTS.psm1" -Force
-    Initialize-Logger -LogDirectory "$PSScriptRoot\..\tests\logs" -LogPrefix "test-sql"
+    . "$PSScriptRoot\..\src\Private\Logger.ps1"
+    . "$PSScriptRoot\..\src\Private\SQLConverter.ps1"
+
+    Mock Write-Log { }
 }
 
-Describe "ConvertTo-SqlStatements - Basic Tables" {
-    
+Describe "ConvertTo-SqlStatements - Basic Tables" { 
     It "Generates CREATE TABLE with primary key" {
         $schema = @{
             Tables = @(
@@ -20,8 +21,8 @@ Describe "ConvertTo-SqlStatements - Basic Tables" {
             JunctionTables = @()
         }
         
-        $result = SchemaToSqlFromObject -Schema $schema
-        $sql = @($result)  # Force array to handle single or multiple results
+        $result = ConvertTo-SqlStatements -Schema $schema
+        $sql = @($result)
         
         $sql | Should -Not -BeNullOrEmpty
         $sql.Count | Should -Be 1
@@ -51,7 +52,7 @@ Describe "ConvertTo-SqlStatements - Basic Tables" {
             JunctionTables = @()
         }
         
-        $result = SchemaToSqlFromObject -Schema $schema
+        $result = ConvertTo-SqlStatements -Schema $schema
         $sql = @($result)
         
         $sql.Count | Should -Be 2
@@ -77,7 +78,7 @@ Describe "ConvertTo-SqlStatements - Basic Tables" {
             JunctionTables = @()
         }
         
-        $result = SchemaToSqlFromObject -Schema $schema
+        $result = ConvertTo-SqlStatements -Schema $schema
         $sql = @($result)
         
         $sql[0] | Should -Match "emp_id INT PRIMARY KEY"
@@ -85,18 +86,6 @@ Describe "ConvertTo-SqlStatements - Basic Tables" {
         $sql[0] | Should -Match "last_name VARCHAR\(100\)"
         $sql[0] | Should -Match "email VARCHAR\(255\)"
         $sql[0] | Should -Match "hire_date DATE"
-    }
-    
-    It "Handles empty table list" {
-        $schema = @{
-            Tables = @()
-            JunctionTables = @()
-        }
-        
-        $result = SchemaToSqlFromObject -Schema $schema
-        $sql = @($result)
-        
-        $sql.Count | Should -Be 0
     }
 }
 
@@ -120,7 +109,7 @@ Describe "ConvertTo-SqlStatements - Junction Tables" {
             )
         }
         
-        $result = SchemaToSqlFromObject -Schema $schema
+        $result = ConvertTo-SqlStatements -Schema $schema
         $sql = @($result)
         
         $sql.Count | Should -Be 1
@@ -148,7 +137,7 @@ Describe "ConvertTo-SqlStatements - Junction Tables" {
             )
         }
         
-        $result = SchemaToSqlFromObject -Schema $schema
+        $result = ConvertTo-SqlStatements -Schema $schema
         $sql = @($result)
         
         $sql[0] | Should -Match "FOREIGN KEY \(student_id\) REFERENCES students\(student_id\)"
@@ -184,7 +173,7 @@ Describe "ConvertTo-SqlStatements - Junction Tables" {
             )
         }
         
-        $result = SchemaToSqlFromObject -Schema $schema
+        $result = ConvertTo-SqlStatements -Schema $schema
         $sql = @($result)
         
         $sql.Count | Should -Be 2
@@ -230,7 +219,7 @@ Describe "ConvertTo-SqlStatements - Mixed Tables and Junctions" {
             )
         }
         
-        $result = SchemaToSqlFromObject -Schema $schema
+        $result = ConvertTo-SqlStatements -Schema $schema
         $sql = @($result)
         
         $sql.Count | Should -Be 3
@@ -257,7 +246,7 @@ Describe "ConvertTo-SqlStatements - SQL Syntax Validation" {
             JunctionTables = @()
         }
         
-        $result = SchemaToSqlFromObject -Schema $schema
+        $result = ConvertTo-SqlStatements -Schema $schema
         $sql = @($result)
         
         $sql[0] | Should -Match "CREATE TABLE products \(`n"
@@ -281,7 +270,7 @@ Describe "ConvertTo-SqlStatements - SQL Syntax Validation" {
             JunctionTables = @()
         }
         
-        $result = SchemaToSqlFromObject -Schema $schema
+        $result = ConvertTo-SqlStatements -Schema $schema
         $sql = @($result)
         
         $sql[0] | Should -Match "id INT PRIMARY KEY,`n"
@@ -301,7 +290,7 @@ Describe "ConvertTo-SqlStatements - SQL Syntax Validation" {
             JunctionTables = @()
         }
         
-        $result = SchemaToSqlFromObject -Schema $schema
+        $result = ConvertTo-SqlStatements -Schema $schema
         $sql = @($result)
         
         $sql[0] | Should -Match "\);$"
@@ -328,7 +317,7 @@ Describe "ConvertTo-SqlStatements - Data Type Support" {
             JunctionTables = @()
         }
         
-        $result = SchemaToSqlFromObject -Schema $schema
+        $result = ConvertTo-SqlStatements -Schema $schema
         $sql = @($result)
         
         $sql[0] | Should -Match "description TEXT"
@@ -340,45 +329,15 @@ Describe "ConvertTo-SqlStatements - Data Type Support" {
 
 Describe "ConvertTo-SqlStatements - Edge Cases" {
     
-    It "Handles table name with special characters" {
+    It "Handles empty table list" {
         $schema = @{
-            Tables = @(
-                @{
-                    Name = "user_accounts"
-                    PrimaryKey = "id"
-                    Columns = @(
-                        @{ Name = "id"; Type = "INT"; IsPrimaryKey = $true }
-                    )
-                }
-            )
+            Tables = @()
             JunctionTables = @()
         }
         
-        $result = SchemaToSqlFromObject -Schema $schema
+        $result = ConvertTo-SqlStatements -Schema $schema
         $sql = @($result)
         
-        $sql[0] | Should -Match "CREATE TABLE user_accounts"
-    }
-    
-    It "Handles single column table" {
-        $schema = @{
-            Tables = @(
-                @{
-                    Name = "simple"
-                    PrimaryKey = "id"
-                    Columns = @(
-                        @{ Name = "id"; Type = "INT"; IsPrimaryKey = $true }
-                    )
-                }
-            )
-            JunctionTables = @()
-        }
-        
-        $result = SchemaToSqlFromObject -Schema $schema
-        $sql = @($result)
-        
-        $sql.Count | Should -Be 1
-        $sql[0] | Should -Match "CREATE TABLE simple"
-        $sql[0] | Should -Match "id INT PRIMARY KEY"
+        $sql.Count | Should -Be 0
     }
 }

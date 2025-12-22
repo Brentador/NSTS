@@ -8,21 +8,30 @@ function ConvertTo-SqlStatements {
     
     foreach ($table in $Schema.Tables) {
         $createTable = "CREATE TABLE $($table.Name) (`n"
-        
+
         $columnDefinitions = @()
+        $foreignKeyDefs = @()
         foreach ($column in $table.Columns) {
             $def = "    $($column.Name) $($column.Type)"
-            
             if ($column.IsPrimaryKey) {
                 $def += " PRIMARY KEY"
             }
-            
             $columnDefinitions += $def
+
+            if ($column.IsForeignKey -and $column.ReferencesTable -and $column.ReferencesColumn) {
+                $foreignKeyDefs += "    FOREIGN KEY ($($column.Name)) REFERENCES $($column.ReferencesTable)($($column.ReferencesColumn))"
+            }
         }
-        
-        $createTable += ($columnDefinitions -join ",`n")
+
+        if ($table.ForeignKeys) {
+            foreach ($fk in $table.ForeignKeys) {
+                $foreignKeyDefs += "    FOREIGN KEY ($($fk.Column)) REFERENCES $($fk.ReferenceTable)($($fk.ReferenceColumn))"
+            }
+        }
+
+        $createTable += ($columnDefinitions + $foreignKeyDefs -join ",`n")
         $createTable += "`n);"
-        
+
         $sqlStatements += $createTable
         Write-Log "Generated CREATE TABLE statement for '$($table.Name)'." -Level "INFO"
     }

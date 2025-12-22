@@ -429,7 +429,7 @@ function Confirm-Schema {
         }
         "E" { 
             $editedSchema = Edit-Schema -Schema $Schema
-            return Confirm-Schema -Schema $editedSchema4
+            return Confirm-Schema -Schema $editedSchema
         }
         "Q" { 
             Write-Host "`nExiting without saving..." -ForegroundColor Red

@@ -3,6 +3,7 @@
 . "$PSScriptRoot\Private\SchemaValidator.ps1"
 . "$PSScriptRoot\Private\SQLConverter.ps1"
 . "$PSScriptRoot\Private\Logger.ps1"
+. "$PSScriptRoot\Private\DatabaseExecutor.ps1"
 
 Add-Type -AssemblyName System.Windows.Forms
 
@@ -103,6 +104,19 @@ function SchemaToSql {
     } else {
         $sqlStatements | Out-File -FilePath $sqlPath -Encoding UTF8
         Write-Host "`nSQL saved to: $sqlPath" -ForegroundColor Green
+
+        $execute = Read-Host "Do you want to execute this SQL on a MySQL database now? (Y/N)"
+        if ($execute -eq "Y" -or $execute -eq "y") {
+            $mysqlExe = Read-Host "Enter path to mysql.exe (e.g., C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe)"
+            $server = Read-Host "Enter MySQL server address (e.g., localhost)"
+            $database = Read-Host "Enter MySQL database name"
+            $username = Read-Host "Enter MySQL username"
+            $password = Read-Host "Enter MySQL password"
+
+            Invoke-MySqlScript -MySqlExePath $mysqlExe -Server $server -Database $database -Username $username -Password $password -SqlFile $sqlPath
+        } else {
+            Write-Host "SQL execution skipped." -ForegroundColor Yellow
+        }
     }
 }
 
@@ -116,17 +130,32 @@ function SchemaToSqlFromObject {
     return $sqlStatements
 }
 
-function Show-Menu {
-    Clear-Host
-    Write-Host ""
-    Write-Host "==========================================" -ForegroundColor Cyan
-    Write-Host "        NSTS - JSON/Schema/SQL Tool       " -ForegroundColor Green
-    Write-Host "==========================================" -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host "  1. Convert JSON to Schema"
-    Write-Host "  2. Convert Schema to SQL"
-    Write-Host "  Q. Quit"
-    Write-Host ""
+function DryRun {
+    Initialize-Logger -LogDirectory ".\logs\json-to-sql-dryrun" -LogPrefix "json-to-sql-dryrun"
+    $jsonPath = Open-File "JSON Files (*.json)|*.json" "Select JSON File"
+    if ([string]::IsNullOrEmpty($jsonPath)) {
+        Write-Host "No file was chosen." -ForegroundColor Yellow
+        return
+    }
+
+    Write-Host "You chose FileName: $jsonPath"
+    $jsonData = Get-JsonContent -Path $jsonPath
+    Write-Host "`nDetecting schema..." -ForegroundColor Yellow
+    $schema = Get-JsonSchema -JsonData $jsonData
+    $validatedSchema = Confirm-Schema -Schema $schema
+
+    if ($null -ne $validatedSchema) {
+        Write-Host "`nGenerating SQL statements..." -ForegroundColor Yellow
+        $sqlStatements = ConvertTo-SqlStatements -Schema $validatedSchema
+
+        Write-Host "`n=== GENERATED SQL (Dry Run) ===" -ForegroundColor Green
+        foreach ($sql in $sqlStatements) {
+            Write-Host "`n$sql`n" -ForegroundColor White
+        }
+        Write-Host "`nDry run complete." -ForegroundColor Yellow
+    } else {
+        Write-Host "`nSchema validation cancelled." -ForegroundColor Red
+    }
 }
 
-Export-ModuleMember -Function Show-Menu, Open-File, Save-File, JsonToSchema, SchemaToSql, Initialize-Logger, Write-Log, JsonToSchemaFromObject, SchemaToSqlFromObject
+Export-ModuleMember -Function Show-Menu, Open-File, Save-File, JsonToSchema, SchemaToSql, Initialize-Logger, Write-Log, JsonToSchemaFromObject, SchemaToSqlFromObject, DryRun
