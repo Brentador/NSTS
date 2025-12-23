@@ -426,10 +426,7 @@ Describe "Add-SingleObject" {
         Mock Get-SqlType { param($value) if ($value -is [int]) { "INT" } else { "VARCHAR(255)" } }
         $result = Add-SingleObject $addressProperty $addressValue $baseTable $emptySchema
 
-        $newBaseTable = $result[0]
-        $newSchema = $result[1]
-
-        $table = $newSchema.Tables | Where-Object { $_.Name -eq $addressProperty }
+        $table = $result.Tables | Where-Object { $_.Name -eq $addressProperty }
         $table | Should -Not -BeNullOrEmpty
         $table.RelationType | Should -Be "OneToMany"
         $table.PrimaryKey | Should -Be "address_pk"
@@ -442,7 +439,7 @@ Describe "Add-SingleObject" {
         Mock Get-SqlType { param($value) if ($value -is [int]) { "INT" } else { "VARCHAR(255)" } }
         $result = Add-SingleObject $profileProperty $profileValue $baseTableWithUserId $emptySchema
 
-        $table = $result[1].Tables | Where-Object { $_.Name -eq $profileProperty }
+        $table = $result.Tables | Where-Object { $_.Name -eq $profileProperty }
         $table.PrimaryKey | Should -Be "id"
     }
 }

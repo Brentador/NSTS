@@ -1,4 +1,30 @@
 function Get-JsonSchema {
+    <#
+    .SYNOPSIS
+        Detects and generates a database schema from JSON data.
+
+    .DESCRIPTION
+        This function analyzes the first record of the provided JSON data to infer a database schema.
+        It detects primary keys, table names, columns, and relationships (including junction tables for many-to-many).
+        Supports relationship overrides for custom handling.
+
+    .PARAMETER JsonData
+        An array of JSON objects representing the data to analyze.
+
+    .PARAMETER RelationshipOverrides
+        A hashtable of custom relationship mappings (optional).
+
+    .OUTPUTS
+        Hashtable
+        A schema object with Tables and JunctionTables.
+
+    .EXAMPLE
+        $schema = Get-JsonSchema -JsonData $jsonArray
+        # Generates schema from JSON data.
+
+    .NOTES
+        Assumes the first record is representative. Logs detection steps.
+    #>
     param (
         [Parameter(Mandatory)] $JsonData,
         [hashtable]$RelationshipOverrides = @{}
@@ -33,8 +59,8 @@ function Get-JsonSchema {
     }
 
     $schema = @{
-        Tables             = @()
-        JunctionTables     = @()
+        Tables         = @()
+        JunctionTables = @()
     }
 
     $baseTable = @{
@@ -71,9 +97,7 @@ function Get-JsonSchema {
                 Write-Log "Detected object array for property '$propertyName', creating related table '$propertyName'." -Level "INFO"
             }
             "SingleObject" {
-                $result = Add-SingleObject $propertyName $value $baseTable $schema
-                $baseTable = $result[0]
-                $schema = $result[1]
+                $schema = Add-SingleObject $propertyName $value $baseTable $schema
             }
         }
     }
@@ -84,6 +108,23 @@ function Get-JsonSchema {
 }
 
 function Get-PrimaryKeyField {
+    <#
+    .SYNOPSIS
+        Detects a primary key field from property names.
+
+    .DESCRIPTION
+        Scans the list of properties for common ID patterns. If none found, suggests auto-generating 'id'.
+
+    .PARAMETER properties
+        Array of property names.
+
+    .OUTPUTS
+        Hashtable
+        With Field and AutoGenerate keys.
+
+    .EXAMPLE
+        $pk = Get-PrimaryKeyField -properties $props
+    #>
     param ($properties)
     $PrimaryKeyField = $properties | Where-Object {
         $_ -match '^(id|.*Id|.*_id|.*ID|.*const|pk)$'
@@ -95,6 +136,23 @@ function Get-PrimaryKeyField {
 }
 
 function Get-MainTableName {
+    <#
+    .SYNOPSIS
+        Derives a table name from the primary key field.
+
+    .DESCRIPTION
+        Parses the PK field to suggest a pluralized table name. Falls back to placeholder if unclear.
+
+    .PARAMETER PrimaryKeyField
+        The name of the primary key field.
+
+    .OUTPUTS
+        String
+        The suggested table name.
+
+    .EXAMPLE
+        $tableName = Get-MainTableName -PrimaryKeyField "userId"
+    #>
     param ($PrimaryKeyField)
     if ($PrimaryKeyField -match '^(.+?)(Id|_id|ID|const)$') {
         $baseName = $matches[1]
@@ -112,6 +170,32 @@ function Get-MainTableName {
 }
 
 function Get-SimpleValue {
+    <#
+    .SYNOPSIS
+        Creates a column definition for a simple value property.
+
+    .DESCRIPTION
+        Generates a column hashtable for non-array, non-object properties.
+
+    .PARAMETER propertyName
+        The property name.
+
+    .PARAMETER value
+        The property value.
+
+    .PARAMETER PrimaryKeyField
+        The PK field name.
+
+    .PARAMETER autoGenerateId
+        Whether to auto-generate ID.
+
+    .OUTPUTS
+        Hashtable
+        Column definition.
+
+    .EXAMPLE
+        $col = Get-SimpleValue -propertyName "name" -value "John" -PrimaryKeyField "id" -autoGenerateId $false
+    #>
     param ($propertyName, $value, $PrimaryKeyField, $autoGenerateId)
     return @{
         Name         = $propertyName
@@ -121,6 +205,41 @@ function Get-SimpleValue {
 }
 
 function Add-SimpleArray {
+    <#
+    .SYNOPSIS
+        Adds a table for a simple array property (many-to-many).
+
+    .DESCRIPTION
+        Creates a related table for arrays of simple values, with a junction table.
+
+    .PARAMETER propertyName
+        The property name.
+
+    .PARAMETER value
+        The array value.
+
+    .PARAMETER MainTableName
+        The main table name.
+
+    .PARAMETER PrimaryKeyField
+        The PK field.
+
+    .PARAMETER autoGenerateId
+        Auto-generate ID flag.
+
+    .PARAMETER firstRecord
+        The first JSON record.
+
+    .PARAMETER schema
+        The schema hashtable.
+
+    .OUTPUTS
+        None
+        Modifies $schema in place.
+
+    .EXAMPLE
+        Add-SimpleArray -propertyName "tags" -value @("tag1") -MainTableName "users" -schema $schema
+    #>
     param ($propertyName, $value, $MainTableName, $PrimaryKeyField, $autoGenerateId, $firstRecord, $schema)
     $relatedTableName = $propertyName
     $relatedPK = "${propertyName}_id"
@@ -151,6 +270,47 @@ function Add-SimpleArray {
 }
 
 function Add-ObjectArray {
+    <#
+    .SYNOPSIS
+        Handles object arrays, determining relationship type and adding tables.
+
+    .DESCRIPTION
+        Detects if the object array is one-to-many or many-to-many, or uses overrides.
+        Calls appropriate helper functions.
+
+    .PARAMETER propertyName
+        The property name.
+
+    .PARAMETER value
+        The array of objects.
+
+    .PARAMETER MainTableName
+        Main table name.
+
+    .PARAMETER PrimaryKeyField
+        PK field.
+
+    .PARAMETER autoGenerateId
+        Auto-generate flag.
+
+    .PARAMETER firstRecord
+        First JSON record.
+
+    .PARAMETER schema
+        Schema hashtable.
+
+    .PARAMETER AllRecords
+        All JSON records.
+
+    .PARAMETER Overrides
+        Relationship overrides.
+
+    .OUTPUTS
+        Modified schema.
+
+    .EXAMPLE
+        $schema = Add-ObjectArray -propertyName "reviews" -value $array -schema $schema
+    #>
     param (
         $propertyName, 
         $value, 
@@ -198,7 +358,7 @@ function Add-ObjectArray {
         }
     }
     
-    Write-Host "    $propertyName (object array → $relationType)" -ForegroundColor Yellow
+    Write-Host "    $propertyName (object array -> $relationType)" -ForegroundColor Yellow
     Write-Host "    Reason: $reason" -ForegroundColor Gray
     
     if ($relationType -eq "OneToMany") {
@@ -210,6 +370,29 @@ function Add-ObjectArray {
 }
 
 function Get-RelationTypeById {
+    <#
+    .SYNOPSIS
+        Determines relation type by analyzing ID uniqueness in object arrays.
+
+    .DESCRIPTION
+        Checks if child objects are shared across parents to detect one-to-many vs many-to-many.
+
+    .PARAMETER PropertyName
+        The property name.
+
+    .PARAMETER AllRecords
+        All JSON records.
+
+    .PARAMETER PkField
+        The PK field in child objects.
+
+    .OUTPUTS
+        Hashtable
+        With Type and Reason.
+
+    .EXAMPLE
+        $result = Get-RelationTypeById -PropertyName "reviews" -AllRecords $data -PkField "id"
+    #>
     param ($PropertyName, $AllRecords, $PkField)
     
     $childToParentsMap = @{}
@@ -251,6 +434,32 @@ function Get-RelationTypeById {
 }
 
 function Get-RelationTypeByComposite {
+    <#
+    .SYNOPSIS
+        Determines relation type by composite field uniqueness.
+
+    .DESCRIPTION
+        Analyzes if child objects are unique based on meaningful fields.
+
+    .PARAMETER PropertyName
+        Property name.
+
+    .PARAMETER Value
+        Array value.
+
+    .PARAMETER AllRecords
+        All records.
+
+    .PARAMETER Properties
+        Child properties.
+
+    .OUTPUTS
+        Hashtable
+        With Type and Reason.
+
+    .EXAMPLE
+        $result = Get-RelationTypeByComposite -PropertyName "tags" -Value $array -AllRecords $data -Properties $props
+    #>
     param ($PropertyName, $Value, $AllRecords, $Properties)
     
     # Filter out metadata fields
@@ -302,6 +511,40 @@ function Get-RelationTypeByComposite {
 
 
 function Add-OneToManyObjectArray {
+    <#
+    .SYNOPSIS
+        Adds a related table for one-to-many object arrays.
+
+    .DESCRIPTION
+        Creates a child table with FK to parent, for one-to-many relationships.
+
+    .PARAMETER propertyName
+        Property name.
+
+    .PARAMETER value
+        Array of objects.
+
+    .PARAMETER MainTableName
+        Parent table name.
+
+    .PARAMETER PrimaryKeyField
+        Parent PK.
+
+    .PARAMETER autoGenerateId
+        Auto-generate flag.
+
+    .PARAMETER firstRecord
+        First record.
+
+    .PARAMETER schema
+        Schema hashtable.
+
+    .OUTPUTS
+        Modified schema.
+
+    .EXAMPLE
+        $schema = Add-OneToManyObjectArray -propertyName "reviews" -value $array -schema $schema
+    #>
     param ($propertyName, $value, $MainTableName, $PrimaryKeyField, $autoGenerateId, $firstRecord, $schema)
     
     $relatedTableName = $propertyName
@@ -353,13 +596,46 @@ function Add-OneToManyObjectArray {
 }
 
 function Add-ManyToManyObjectArray {
+    <#
+    .SYNOPSIS
+        Adds tables for many-to-many object arrays.
+
+    .DESCRIPTION
+        Creates a related table and junction table for many-to-many relationships.
+
+    .PARAMETER propertyName
+        Property name.
+
+    .PARAMETER value
+        Array of objects.
+
+    .PARAMETER MainTableName
+        Parent table.
+
+    .PARAMETER PrimaryKeyField
+        Parent PK.
+
+    .PARAMETER autoGenerateId
+        Auto-generate flag.
+
+    .PARAMETER firstRecord
+        First record.
+
+    .PARAMETER schema
+        Schema hashtable.
+
+    .OUTPUTS
+        Modified schema.
+
+    .EXAMPLE
+        $schema = Add-ManyToManyObjectArray -propertyName "tags" -value $array -schema $schema
+    #>
     param ($propertyName, $value, $MainTableName, $PrimaryKeyField, $autoGenerateId, $firstRecord, $schema)
     
     $relatedTableName = $propertyName
     $firstElement = $value[0]
     $objectKeys = @($firstElement.PSObject.Properties.Name)
     
-    # Use first field as PK (or detected ID field)
     $relatedPK = $objectKeys | Where-Object { $_ -match '^(id|.*_id|.*ID)$' } | Select-Object -First 1
     if (-not $relatedPK) {
         $relatedPK = $objectKeys[0]
@@ -398,6 +674,31 @@ function Add-ManyToManyObjectArray {
 }
 
 function Add-SingleObject {
+    <#
+    .SYNOPSIS
+        Adds columns for a single nested object.
+
+    .DESCRIPTION
+        Flattens a single object into columns in the base table.
+
+    .PARAMETER propertyName
+        Property name.
+
+    .PARAMETER value
+        The object value.
+
+    .PARAMETER baseTable
+        The base table hashtable.
+
+    .PARAMETER schema
+        Schema hashtable.
+
+    .OUTPUTS
+        Modified baseTable.
+
+    .EXAMPLE
+        $baseTable = Add-SingleObject -propertyName "address" -value $obj -baseTable $table -schema $schema
+    #>
     param ($propertyName, $value, $baseTable, $schema)
 
     $nestedProperties = $value.PSObject.Properties
@@ -442,10 +743,27 @@ function Add-SingleObject {
         ReferencesColumn = $baseTable.PrimaryKey
     }
 
-    return @($baseTable, $schema)
+    return $schema
 }
 
 function Get-FieldType {
+    <#
+    .SYNOPSIS
+        Determines the type of a JSON field value.
+
+    .DESCRIPTION
+        Classifies values as SimpleValue, SimpleArray, ObjectArray, or SingleObject.
+
+    .PARAMETER Value
+        The value to classify.
+
+    .OUTPUTS
+        String
+        The field type.
+
+    .EXAMPLE
+        $type = Get-FieldType -Value $someValue
+    #>
     param ($Value)
 
     if ($null -eq $Value) { return "SimpleValue" }
@@ -469,6 +787,23 @@ function Get-FieldType {
 }
 
 function Get-SqlType {
+    <#
+    .SYNOPSIS
+        Maps a .NET value type to an SQL data type.
+
+    .DESCRIPTION
+        Converts common .NET types to MySQL-compatible types.
+
+    .PARAMETER Value
+        The value to map.
+
+    .OUTPUTS
+        String
+        The SQL type.
+
+    .EXAMPLE
+        $sqlType = Get-SqlType -Value 123
+    #>
     param ($Value)
 
     if ($null -eq $Value) { return "VARCHAR(255)" }

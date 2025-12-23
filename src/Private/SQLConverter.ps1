@@ -1,4 +1,20 @@
 function ConvertTo-SqlStatements {
+    <#
+    .SYNOPSIS
+        Converts a schema to SQL CREATE TABLE statements.
+
+    .DESCRIPTION
+        Generates SQL CREATE TABLE statements for all tables and junction tables in the provided schema, including primary keys and foreign keys.
+
+    .PARAMETER Schema
+        The schema object containing tables and junction tables.
+
+    .OUTPUTS
+        Array of SQL CREATE TABLE statements.
+
+    .EXAMPLE
+        $sql = ConvertTo-SqlStatements -Schema $schema
+    #>
     param (
         [Parameter(Mandatory = $true)]$Schema
     )

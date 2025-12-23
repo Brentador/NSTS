@@ -8,6 +8,25 @@
 Add-Type -AssemblyName System.Windows.Forms
 
 function Open-File([string]$filter, [string]$title) {
+    <#
+    .SYNOPSIS
+        Opens a file dialog for selecting a file.
+
+    .DESCRIPTION
+        Displays a Windows Forms OpenFileDialog with the specified filter and title.
+
+    .PARAMETER filter
+        File filter string (e.g., "JSON Files (*.json)|*.json").
+
+    .PARAMETER title
+        Dialog title.
+
+    .OUTPUTS
+        Selected file path or empty string if cancelled.
+
+    .EXAMPLE
+        $file = Open-File "JSON Files (*.json)|*.json" "Select JSON File"
+    #>
     $OpenFileDialog = New-Object System.Windows.Forms.OpenFileDialog
     $OpenFileDialog.filter = $filter
     $OpenFileDialog.Title = $title
@@ -16,6 +35,28 @@ function Open-File([string]$filter, [string]$title) {
 }
 
 function Save-File([string]$filter, [string]$defaultName, [string]$title) {
+    <#
+    .SYNOPSIS
+        Opens a save file dialog.
+
+    .DESCRIPTION
+        Displays a Windows Forms SaveFileDialog with the specified filter, default name, and title.
+
+    .PARAMETER filter
+        File filter string.
+
+    .PARAMETER defaultName
+        Default file name.
+
+    .PARAMETER title
+        Dialog title.
+
+    .OUTPUTS
+        Selected save path or empty string if cancelled.
+
+    .EXAMPLE
+        $file = Save-File "JSON Files (*.json)|*.json" "schema.json" "Save Schema"
+    #>
     $SaveFileDialog = New-Object System.Windows.Forms.SaveFileDialog
     $SaveFileDialog.filter = $filter
     $SaveFileDialog.FileName = $defaultName
@@ -27,6 +68,19 @@ function Save-File([string]$filter, [string]$defaultName, [string]$title) {
 
 # JSON to Schema
 function JsonToSchema {
+    <#
+    .SYNOPSIS
+        Converts JSON file to schema.
+
+    .DESCRIPTION
+        Opens a file dialog to select a JSON file, detects the schema, allows validation/editing, and saves the schema.
+
+    .PARAMETER RelationshipOverrides
+        Optional hashtable to override detected relationships.
+
+    .EXAMPLE
+        JsonToSchema
+    #>
     param (
         [hashtable]$RelationshipOverrides = @{}
     )
@@ -58,19 +112,19 @@ function JsonToSchema {
     }
 }
 
-#test function
-function JsonToSchemaFromObject {
-    param (
-        [Parameter(Mandatory)]
-        $JsonData,
-        [hashtable]$RelationshipOverrides = @{}
-    )
-    $schema = Get-JsonSchema -JsonData $JsonData -RelationshipOverrides $RelationshipOverrides
-    return $schema
-}
 
 # Schema to SQL
 function SchemaToSql {
+    <#
+    .SYNOPSIS
+        Converts schema file to SQL.
+
+    .DESCRIPTION
+        Loads a schema from JSON file, generates SQL statements, saves to file, and optionally executes on MySQL.
+
+    .EXAMPLE
+        SchemaToSql
+    #>
     Initialize-Logger -LogDirectory ".\logs\schema-to-sql" -LogPrefix "schema-to-sql"
     $schemaPath = Open-File "JSON Schema Files (*.json)|*.json|All JSON Files (*.json)|*.json" "Select Schema JSON File"
     if ([string]::IsNullOrEmpty($schemaPath)) {
@@ -120,17 +174,18 @@ function SchemaToSql {
     }
 }
 
-function SchemaToSqlFromObject {
-    param (
-        [Parameter(Mandatory)]
-        $Schema
-    )
-    
-    $sqlStatements = ConvertTo-SqlStatements -Schema $Schema
-    return $sqlStatements
-}
 
 function DryRun {
+    <#
+    .SYNOPSIS
+        Performs a dry run of JSON to SQL conversion.
+
+    .DESCRIPTION
+        Converts JSON to schema, validates, generates SQL, and displays it without saving or executing.
+
+    .EXAMPLE
+        DryRun
+    #>
     Initialize-Logger -LogDirectory ".\logs\json-to-sql-dryrun" -LogPrefix "json-to-sql-dryrun"
     $jsonPath = Open-File "JSON Files (*.json)|*.json" "Select JSON File"
     if ([string]::IsNullOrEmpty($jsonPath)) {
