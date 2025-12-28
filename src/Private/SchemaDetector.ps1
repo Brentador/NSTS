@@ -735,7 +735,7 @@ function Add-SingleObject {
     }
 
     $schema.Tables[-1].Columns += @{
-        Name             = "${baseTable.Name}_id"
+        Name             = $baseTable.PrimaryKey
         Type             = "INT"
         IsPrimaryKey     = $false
         IsForeignKey     = $true
