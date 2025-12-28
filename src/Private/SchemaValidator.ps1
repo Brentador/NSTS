@@ -499,6 +499,18 @@ function Set-TableColumnType {
         [int]$colIndex
     )
     $col = $Table.Columns[$colIndex]
+    Write-ColorText @(
+        @{Text = "`nSelect a valid dataType from the list: "; Color = "Cyan" }
+    )
+    Write-ColorText @(
+        @{Text = "TINYINT, SMALLINT, MEDIUMINT, INT, INTEGER, BIGINT, DECIMAL, DEC, NUMERIC, FIXED, FLOAT, DOUBLE, DOUBLE PRECISION, REAL, BIT, BOOL, BOOLEAN, DATE, TIME, DATETIME, TIMESTAMP, YEAR"; Color = "Magenta" }
+    )
+    Write-ColorText @(
+        @{Text = "CHAR, VARCHAR, TINYTEXT, TEXT, MEDIUMTEXT, LONGTEXT, BINARY, VARBINARY, TINYBLOB, BLOB, MEDIUMBLOB, LONGBLOB, ENUM, SET"; Color = "Green" }
+    )
+    Write-ColorText @(
+        @{Text = "GEOMETRY, POINT, LINESTRING, POLYGON, MULTIPOINT, MULTILINESTRING, MULTIPOLYGON, GEOMETRYCOLLECTION, JSON"; Color = "DarkBlue" }
+    )
     $newColType = (Read-Host "New data type [$($col.Type)]").Trim()
     if ($newColType) {
         $col.Type = $newColType
