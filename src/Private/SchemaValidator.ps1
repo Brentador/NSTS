@@ -455,6 +455,7 @@ function Rename-TableColumn {
                     foreach ($fkCol in $otherTable.Columns) {
                         if ($fkCol.IsForeignKey -and $fkCol.ReferencesTable -eq $Table.Name -and $fkCol.ReferencesColumn -eq $oldColName) {
                             $fkCol.ReferencesColumn = $newColName
+                            $fkCol.Name = $newColName
                         }
                     }
                 }
@@ -589,6 +590,7 @@ function Edit-Table {
     $editingTable = $true
 
     while ($editingTable) {
+        Clear-Host
         Write-ColorText @(
             @{Text = "`n--- Editing Table: $($Table.Name) ---"; Color = "Cyan" }
         )
@@ -691,6 +693,7 @@ function Edit-Schema {
     $editing = $true
     
     while ($editing) {
+        Clear-Host
         Show-Schema -Schema $Schema
         
         $tableCount = $Schema.Tables.Count
