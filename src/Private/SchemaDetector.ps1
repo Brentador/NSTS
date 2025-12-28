@@ -89,7 +89,7 @@ function Get-JsonSchema {
                 $baseTable.Columns += Get-SimpleValue $propertyName $value $PrimaryKeyField $autoGenerateId
             }
             "SimpleArray" {
-                $schema = Add-SimpleArray $propertyName $value $MainTableName $PrimaryKeyField $autoGenerateId $firstRecord $schema
+                $schema = Add-SimpleArray $propertyName $value $MainTableName $PrimaryKeyField $autoGenerateId $firstRecord $schema $RelationshipOverrides
                 Write-Log "Detected simple array for property '$propertyName', creating related table '$propertyName'." -Level "INFO"
             }
             "ObjectArray" {
@@ -97,7 +97,7 @@ function Get-JsonSchema {
                 Write-Log "Detected object array for property '$propertyName', creating related table '$propertyName'." -Level "INFO"
             }
             "SingleObject" {
-                $schema = Add-SingleObject $propertyName $value $baseTable $schema
+                $schema = Add-SingleObject $propertyName $value $MainTableName $baseTable $schema $RelationshipOverrides
             }
         }
     }
@@ -240,31 +240,53 @@ function Add-SimpleArray {
     .EXAMPLE
         Add-SimpleArray -propertyName "tags" -value @("tag1") -MainTableName "users" -schema $schema
     #>
-    param ($propertyName, $value, $MainTableName, $PrimaryKeyField, $autoGenerateId, $firstRecord, $schema)
+    param ($propertyName, $value, $MainTableName, $PrimaryKeyField, $autoGenerateId, $firstRecord, $schema, $Overrides)
     $relatedTableName = $propertyName
     $relatedPK = "${propertyName}_id"
     $elementType = if ($value.Count -gt 0) { Get-SqlType -Value $value[0] } else { "VARCHAR(255)" }
-    $schema.Tables += @{
-        Name         = $relatedTableName
-        PrimaryKey   = $relatedPK
-        RelationType = "ManyToMany"
-        Columns      = @(
-            @{ Name = $relatedPK; Type = "INT"; IsPrimaryKey = $true }
-            @{ Name = "${propertyName}_value"; Type = $elementType; IsPrimaryKey = $false }
-        )
+
+    $relationType = if ($Overrides -and $Overrides.ContainsKey($propertyName)) {
+        Write-Host "  → $propertyName (simple array → $($Overrides[$propertyName]) - MANUAL OVERRIDE)" -ForegroundColor Cyan
+        $Overrides[$propertyName]
+    } else {
+        "ManyToMany"
     }
+
     $parentPKType = if ($autoGenerateId) { "INT" } else { Get-SqlType -Value $firstRecord.$PrimaryKeyField }
-    $junctionTableName = "${MainTableName}_${propertyName}"
-    $schema.JunctionTables += @{
-        TableName = $junctionTableName
-        Table1    = $MainTableName
-        Table1FK  = $PrimaryKeyField
-        Table2    = $relatedTableName
-        Table2FK  = $relatedPK
-        Columns   = @(
-            @{ Name = $PrimaryKeyField; Type = $parentPKType }
-            @{ Name = $relatedPK; Type = "INT" }
-        )
+
+    if ($relationType -eq "OneToMany") {
+        $schema.Tables += @{
+            Name         = $relatedTableName
+            PrimaryKey   = $relatedPK
+            RelationType = "OneToMany"
+            Columns      = @(
+                @{ Name = $relatedPK; Type = "INT"; IsPrimaryKey = $true }
+                @{ Name = "${propertyName}_value"; Type = $elementType; IsPrimaryKey = $false }
+                @{ Name = $PrimaryKeyField; Type = $parentPKType; IsPrimaryKey = $false; IsForeignKey = $true; ReferencesTable = $MainTableName; ReferencesColumn = $PrimaryKeyField }
+            )
+        }
+    } else {
+        $schema.Tables += @{
+            Name         = $relatedTableName
+            PrimaryKey   = $relatedPK
+            RelationType = "ManyToMany"
+            Columns      = @(
+                @{ Name = $relatedPK; Type = "INT"; IsPrimaryKey = $true }
+                @{ Name = "${propertyName}_value"; Type = $elementType; IsPrimaryKey = $false }
+            )
+        }
+        $junctionTableName = "${MainTableName}_${propertyName}"
+        $schema.JunctionTables += @{
+            TableName = $junctionTableName
+            Table1    = $MainTableName
+            Table1FK  = $PrimaryKeyField
+            Table2    = $relatedTableName
+            Table2FK  = $relatedPK
+            Columns   = @(
+                @{ Name = $PrimaryKeyField; Type = $parentPKType }
+                @{ Name = $relatedPK; Type = "INT" }
+            )
+        }
     }
     return $schema
 }
@@ -576,7 +598,7 @@ function Add-OneToManyObjectArray {
     
     # Add foreign key to parent
     $columns += @{
-        Name             = "${MainTableName}_${PrimaryKeyField}"
+        Name             = $PrimaryKeyField
         Type             = $parentPKType
         IsPrimaryKey     = $false
         IsForeignKey     = $true
@@ -699,7 +721,7 @@ function Add-SingleObject {
     .EXAMPLE
         $baseTable = Add-SingleObject -propertyName "address" -value $obj -baseTable $table -schema $schema
     #>
-    param ($propertyName, $value, $baseTable, $schema)
+    param ($propertyName, $value, $MainTableName, $baseTable, $schema, $RelationshipOverrides)
 
     $nestedProperties = $value.PSObject.Properties
     $nestedKeys = @($nestedProperties.Name)
@@ -715,10 +737,17 @@ function Add-SingleObject {
 
     $relatedTableName = $propertyName
 
+    $relationType = if ($RelationshipOverrides -and $RelationshipOverrides.ContainsKey($propertyName)) {
+        Write-Host "  → $propertyName (single object → $($RelationshipOverrides[$propertyName]) - MANUAL OVERRIDE)" -ForegroundColor Cyan
+        $RelationshipOverrides[$propertyName]
+    } else {
+        "OneToMany"
+    }
+
     $schema.Tables += @{
         Name         = $relatedTableName
         PrimaryKey   = $relatedPK
-        RelationType = "OneToMany"
+        RelationType = $relationType
         Columns      = @(
             @{
                 Name         = $relatedPK
@@ -734,13 +763,31 @@ function Add-SingleObject {
             })
     }
 
-    $schema.Tables[-1].Columns += @{
-        Name             = $baseTable.PrimaryKey
-        Type             = "INT"
-        IsPrimaryKey     = $false
-        IsForeignKey     = $true
-        ReferencesTable  = $baseTable.Name
-        ReferencesColumn = $baseTable.PrimaryKey
+    $parentPKType = ($baseTable.Columns | Where-Object { $_.Name -eq $baseTable.PrimaryKey }).Type
+
+    if ($relationType -eq "OneToMany") {
+        $schema.Tables[-1].Columns += @{
+            Name             = $baseTable.PrimaryKey
+            Type             = $parentPKType
+            IsPrimaryKey     = $false
+            IsForeignKey     = $true
+            ReferencesTable  = $MainTableName
+            ReferencesColumn = $baseTable.PrimaryKey
+        }
+    } else {
+        # For ManyToMany, create junction table
+        $junctionTableName = "${MainTableName}_${propertyName}"
+        $schema.JunctionTables += @{
+            TableName = $junctionTableName
+            Table1    = $MainTableName
+            Table1FK  = $baseTable.PrimaryKey
+            Table2    = $relatedTableName
+            Table2FK  = $relatedPK
+            Columns   = @(
+                @{ Name = $baseTable.PrimaryKey; Type = $parentPKType }
+                @{ Name = $relatedPK; Type = "INT" }
+            )
+        }
     }
 
     return $schema

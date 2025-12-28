@@ -76,7 +76,7 @@ function JsonToSchema {
         Opens a file dialog to select a JSON file, detects the schema, allows validation/editing, and saves the schema.
 
     .PARAMETER RelationshipOverrides
-        Optional hashtable to override detected relationships.
+        Optional hashtable to override detected relationships. Keys are property names, values are "OneToMany" or "ManyToMany".
 
     .EXAMPLE
         JsonToSchema
@@ -183,9 +183,15 @@ function DryRun {
     .DESCRIPTION
         Converts JSON to schema, validates, generates SQL, and displays it without saving or executing.
 
+    .PARAMETER RelationshipOverrides
+        Optional hashtable to override detected relationships. Keys are property names, values are "OneToMany" or "ManyToMany".
+
     .EXAMPLE
         DryRun
     #>
+    param (
+        [hashtable]$RelationshipOverrides = @{}
+    )
     Initialize-Logger -LogDirectory ".\logs\json-to-sql-dryrun" -LogPrefix "json-to-sql-dryrun"
     $jsonPath = Open-File "JSON Files (*.json)|*.json" "Select JSON File"
     if ([string]::IsNullOrEmpty($jsonPath)) {
@@ -196,7 +202,7 @@ function DryRun {
     Write-Host "You chose FileName: $jsonPath"
     $jsonData = Get-JsonContent -Path $jsonPath
     Write-Host "`nDetecting schema..." -ForegroundColor Yellow
-    $schema = Get-JsonSchema -JsonData $jsonData
+    $schema = Get-JsonSchema -JsonData $jsonData -RelationshipOverrides $RelationshipOverrides
     $validatedSchema = Confirm-Schema -Schema $schema
 
     if ($null -ne $validatedSchema) {
