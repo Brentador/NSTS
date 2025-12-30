@@ -20,8 +20,11 @@ NSTS analyzes your JSON data and automatically:
 ### 1. Clone or Download This Repository
 ```powershell
 git clone https://github.com/Brentador/NSTS.git
+```
 
 Navigate to the directory where you cloned the NSTS project (e.g., C:\path\to\NSTS):
+
+```powershell
 cd C:\path\to\NSTS
 cd src
 ```
