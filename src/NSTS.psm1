@@ -158,19 +158,7 @@ function SchemaToSql {
     } else {
         $sqlStatements | Out-File -FilePath $sqlPath -Encoding UTF8
         Write-Host "`nSQL saved to: $sqlPath" -ForegroundColor Green
-
-        $execute = Read-Host "Do you want to execute this SQL on a MySQL database now? (Y/N)"
-        if ($execute -eq "Y" -or $execute -eq "y") {
-            $mysqlExe = Read-Host "Enter path to mysql.exe (e.g., C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe)"
-            $server = Read-Host "Enter MySQL server address (e.g., localhost)"
-            $database = Read-Host "Enter MySQL database name"
-            $username = Read-Host "Enter MySQL username"
-            $password = Read-Host "Enter MySQL password"
-
-            Invoke-MySqlScript -MySqlExePath $mysqlExe -Server $server -Database $database -Username $username -Password $password -SqlFile $sqlPath
-        } else {
-            Write-Host "SQL execution skipped." -ForegroundColor Yellow
-        }
+        Prompt-ExecuteMySql -SqlFile $sqlPath
     }
 }
 

@@ -150,11 +150,11 @@ function Prompt-ExecuteMySql {
         return
     }
 
-    $mysqlExe = Read-Host "Enter path to mysql.exe (e.g., C:\\Program Files\\MySQL\\MySQL Server 8.0\\bin\\mysql.exe)"
+    $mysqlExe = Read-Host "Enter path to mysql.exe (e.g., C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe)"
     $server = Read-Host "Enter MySQL server address (default: localhost)"
     if (-not $server) { $server = 'localhost' }
     $database = Read-Host "Enter target database name"
-    $credential = Get-Credential -Message "Enter MySQL credentials" -UserName (Read-Host "Enter MySQL username")
+    $credential = Get-Credential -Message "Enter MySQL credentials"
     $username = $credential.UserName
     $password = $credential.GetNetworkCredential().Password
 

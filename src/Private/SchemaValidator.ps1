@@ -231,9 +231,9 @@ function Remove-TableColumn {
 
     if ($columnNum -ge 2 -and $columnNum -le ($Table.Columns.Count + 1)) {
         $actualIndex = $columnNum - 2
-        if ($Table.Columns[$actualIndex].IsPrimaryKey) {
+        if ($Table.Columns[$actualIndex].IsPrimaryKey -or $Table.Columns[$actualIndex].IsForeignKey) {
             Write-ColorText @(
-                @{Text = "Cannot delete the primary key column."; Color = "Red" }
+                @{Text = "Cannot delete the primary key or foreign key column."; Color = "Red" }
             )
         } else {
             $Table.Columns = @(
@@ -590,7 +590,6 @@ function Edit-Table {
     $editingTable = $true
 
     while ($editingTable) {
-        Clear-Host
         Write-ColorText @(
             @{Text = "`n--- Editing Table: $($Table.Name) ---"; Color = "Cyan" }
         )
@@ -693,7 +692,6 @@ function Edit-Schema {
     $editing = $true
     
     while ($editing) {
-        Clear-Host
         Show-Schema -Schema $Schema
         
         $tableCount = $Schema.Tables.Count

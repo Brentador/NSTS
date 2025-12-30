@@ -424,7 +424,7 @@ Describe "Add-SingleObject" {
 
     It "Creates a table for a single nested object with FK" {
         Mock Get-SqlType { param($value) if ($value -is [int]) { "INT" } else { "VARCHAR(255)" } }
-        $result = Add-SingleObject $addressProperty $addressValue $baseTable $emptySchema
+        $result = Add-SingleObject $addressProperty $addressValue $baseTable.Name $baseTable $emptySchema $null
 
         $table = $result.Tables | Where-Object { $_.Name -eq $addressProperty }
         $table | Should -Not -BeNullOrEmpty
@@ -437,7 +437,7 @@ Describe "Add-SingleObject" {
 
     It "Uses existing ID field as PK" {
         Mock Get-SqlType { param($value) if ($value -is [int]) { "INT" } else { "VARCHAR(255)" } }
-        $result = Add-SingleObject $profileProperty $profileValue $baseTableWithUserId $emptySchema
+        $result = Add-SingleObject $profileProperty $profileValue $baseTableWithUserId.Name $baseTableWithUserId $emptySchema $null
 
         $table = $result.Tables | Where-Object { $_.Name -eq $profileProperty }
         $table.PrimaryKey | Should -Be "id"

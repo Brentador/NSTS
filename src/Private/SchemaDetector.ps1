@@ -87,6 +87,7 @@ function Get-JsonSchema {
         switch ($fieldType) {
             "SimpleValue" {
                 $baseTable.Columns += Get-SimpleValue $propertyName $value $PrimaryKeyField $autoGenerateId
+                Write-Log "Processing simple value for property '$propertyName'." -Level "INFO"
             }
             "SimpleArray" {
                 $schema = Add-SimpleArray $propertyName $value $MainTableName $PrimaryKeyField $autoGenerateId $firstRecord $schema $RelationshipOverrides
@@ -98,6 +99,7 @@ function Get-JsonSchema {
             }
             "SingleObject" {
                 $schema = Add-SingleObject $propertyName $value $MainTableName $baseTable $schema $RelationshipOverrides
+                Write-Log "Processing single object for property '$propertyName'." -Level "INFO"
             }
         }
     }
@@ -245,11 +247,21 @@ function Add-SimpleArray {
     $relatedPK = "${propertyName}_id"
     $elementType = if ($value.Count -gt 0) { Get-SqlType -Value $value[0] } else { "VARCHAR(255)" }
 
-    $relationType = if ($Overrides -and $Overrides.ContainsKey($propertyName)) {
-        Write-Host "  → $propertyName (simple array → $($Overrides[$propertyName]) - MANUAL OVERRIDE)" -ForegroundColor Cyan
-        $Overrides[$propertyName]
-    } else {
-        "ManyToMany"
+    $relationType = "ManyToMany"
+    if ($Overrides -and $Overrides.ContainsKey($propertyName)) {
+        $overrideValue = $Overrides[$propertyName].ToString().ToLower()
+        if ($overrideValue -eq "onetomany".ToLower()) {
+            Write-Host "  → $propertyName (simple array → OneToMany - MANUAL OVERRIDE)" -ForegroundColor Cyan
+            $relationType = "OneToMany"
+            Write-Log "Override applied for simple array '$propertyName': OneToMany" -Level "INFO"
+        } elseif ($overrideValue -eq "manytomany".ToLower()) {
+            Write-Host "  → $propertyName (simple array → ManyToMany - MANUAL OVERRIDE)" -ForegroundColor Cyan
+            $relationType = "ManyToMany"
+            Write-Log "Override applied for simple array '$propertyName': ManyToMany" -Level "INFO"
+        } else {
+            Write-Host "  → $propertyName (ERROR: '$($Overrides[$propertyName])' is not a valid relation type. Use 'OneToMany' or 'ManyToMany')" -ForegroundColor Red
+            Write-Log "Invalid override for simple array '$propertyName': '$($Overrides[$propertyName])'. Using default ManyToMany." -Level "WARNING"
+        }
     }
 
     $parentPKType = if ($autoGenerateId) { "INT" } else { Get-SqlType -Value $firstRecord.$PrimaryKeyField }
@@ -288,6 +300,7 @@ function Add-SimpleArray {
             )
         }
     }
+    Write-Log "Created table for simple array '$propertyName' with relation type '$relationType'." -Level "INFO"
     return $schema
 }
 
@@ -344,15 +357,23 @@ function Add-ObjectArray {
         $AllRecords,
         $Overrides
     )
+    Write-Log "Starting Add-ObjectArray for property '$propertyName'." -Level "INFO"
     
     if ($Overrides -and $Overrides.ContainsKey($propertyName)) {
-        $relationType = $Overrides[$propertyName]
+        $overrideValue = $Overrides[$propertyName].ToString().ToLower()
+        if ($overrideValue -eq "onetomany".ToLower()) {
+            $relationType = "OneToMany"
+        } elseif ($overrideValue -eq "manytomany".ToLower()) {
+            $relationType = "ManyToMany"
+        } else {
+            Write-Host "  → $propertyName (ERROR: '$($Overrides[$propertyName])' is not a valid relation type. Use 'OneToMany' or 'ManyToMany')" -ForegroundColor Red
+            Write-Log "Invalid override for object array '$propertyName': '$($Overrides[$propertyName])'. Proceeding with auto-detection." -Level "WARNING"
+        }
         Write-Host "  → $propertyName (object array → $relationType - MANUAL OVERRIDE)" -ForegroundColor Cyan
-        
+        Write-Log "Override applied for object array '$propertyName': $relationType" -Level "INFO"
         if ($relationType -eq "OneToMany") {
             return Add-OneToManyObjectArray $propertyName $value $MainTableName $PrimaryKeyField $autoGenerateId $firstRecord $schema
-        }
-        else {
+        } else {
             return Add-ManyToManyObjectArray $propertyName $value $MainTableName $PrimaryKeyField $autoGenerateId $firstRecord $schema
         }
     }
@@ -382,6 +403,7 @@ function Add-ObjectArray {
     
     Write-Host "    $propertyName (object array -> $relationType)" -ForegroundColor Yellow
     Write-Host "    Reason: $reason" -ForegroundColor Gray
+    Write-Log "Determined relation type for object array '$propertyName': $relationType. Reason: $reason" -Level "INFO"
     
     if ($relationType -eq "OneToMany") {
         return Add-OneToManyObjectArray $propertyName $value $MainTableName $PrimaryKeyField $autoGenerateId $firstRecord $schema
@@ -416,6 +438,7 @@ function Get-RelationTypeById {
         $result = Get-RelationTypeById -PropertyName "reviews" -AllRecords $data -PkField "id"
     #>
     param ($PropertyName, $AllRecords, $PkField)
+    Write-Log "Starting Get-RelationTypeById for property '$PropertyName' with PK field '$PkField'." -Level "INFO"
     
     $childToParentsMap = @{}
     $parentIndex = 0
@@ -444,11 +467,13 @@ function Get-RelationTypeById {
         }
     }
     if ($sharedIds.Count -gt 0) {
+        Write-Log "Relation type result for '$PropertyName': ManyToMany. Reason: Found $($sharedIds.Count) shared ID(s) across multiple parents" -Level "INFO"
         return @{
             Type   = "ManyToMany"
             Reason = "Found $($sharedIds.Count) shared ID(s) across multiple parents"
         }
     }
+    Write-Log "Relation type result for '$PropertyName': OneToMany. Reason: Has ID field, but no IDs are shared in sample" -Level "INFO"
     return @{
         Type   = "OneToMany"
         Reason = "Has ID field, but no IDs are shared in sample"
@@ -483,6 +508,7 @@ function Get-RelationTypeByComposite {
         $result = Get-RelationTypeByComposite -PropertyName "tags" -Value $array -AllRecords $data -Properties $props
     #>
     param ($PropertyName, $Value, $AllRecords, $Properties)
+    Write-Log "Starting Get-RelationTypeByComposite for property '$PropertyName'." -Level "INFO"
     
     # Filter out metadata fields
     $meaningfulFields = $Properties | Where-Object { 
@@ -520,11 +546,13 @@ function Get-RelationTypeByComposite {
         }
     }
     if ($sharedObjects.Count -gt 0) {
+        Write-Log "Relation type result for '$PropertyName': ManyToMany. Reason: Found $($sharedObjects.Count) identical composite object(s) across parents (may be false positive)" -Level "INFO"
         return @{
             Type   = "ManyToMany"
             Reason = "Found $($sharedObjects.Count) identical composite object(s) across parents (may be false positive)"
         }
     }
+    Write-Log "Relation type result for '$PropertyName': OneToMany. Reason: No identical objects found in sample" -Level "INFO"
     return @{
         Type   = "OneToMany"
         Reason = "No identical objects found in sample"
@@ -598,7 +626,7 @@ function Add-OneToManyObjectArray {
     
     # Add foreign key to parent
     $columns += @{
-        Name             = $PrimaryKeyField
+        Name             = "${MainTableName}_${PrimaryKeyField}"
         Type             = $parentPKType
         IsPrimaryKey     = $false
         IsForeignKey     = $true
@@ -722,6 +750,7 @@ function Add-SingleObject {
         $baseTable = Add-SingleObject -propertyName "address" -value $obj -baseTable $table -schema $schema
     #>
     param ($propertyName, $value, $MainTableName, $baseTable, $schema, $RelationshipOverrides)
+    Write-Log "Starting Add-SingleObject for property '$propertyName'." -Level "INFO"
 
     $nestedProperties = $value.PSObject.Properties
     $nestedKeys = @($nestedProperties.Name)
@@ -737,11 +766,18 @@ function Add-SingleObject {
 
     $relatedTableName = $propertyName
 
-    $relationType = if ($RelationshipOverrides -and $RelationshipOverrides.ContainsKey($propertyName)) {
-        Write-Host "  → $propertyName (single object → $($RelationshipOverrides[$propertyName]) - MANUAL OVERRIDE)" -ForegroundColor Cyan
-        $RelationshipOverrides[$propertyName]
-    } else {
-        "OneToMany"
+    $relationType = "OneToMany"
+    if ($RelationshipOverrides -and $RelationshipOverrides.ContainsKey($propertyName)) {
+        $overrideValue = $RelationshipOverrides[$propertyName].ToString().ToLower()
+        if ($overrideValue -eq "onetomany".ToLower()) {
+            Write-Host "  → $propertyName (single object → OneToMany - MANUAL OVERRIDE)" -ForegroundColor Cyan
+            $relationType = "OneToMany"
+        } elseif ($overrideValue -eq "manytomany".ToLower()) {
+            Write-Host "  → $propertyName (single object → ManyToMany - MANUAL OVERRIDE)" -ForegroundColor Cyan
+            $relationType = "ManyToMany"
+        } else {
+            Write-Host "  → $propertyName (ERROR: '$($RelationshipOverrides[$propertyName])' is not a valid relation type. Use 'OneToMany' or 'ManyToMany')" -ForegroundColor Red
+        }
     }
 
     $schema.Tables += @{
@@ -764,6 +800,7 @@ function Add-SingleObject {
     }
 
     $parentPKType = ($baseTable.Columns | Where-Object { $_.Name -eq $baseTable.PrimaryKey }).Type
+    Write-Log "Created table for single object '$propertyName' with relation type '$relationType'." -Level "INFO"
 
     if ($relationType -eq "OneToMany") {
         $schema.Tables[-1].Columns += @{
