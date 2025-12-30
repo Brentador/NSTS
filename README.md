@@ -20,7 +20,9 @@ NSTS analyzes your JSON data and automatically:
 ### 1. Clone or Download This Repository
 ```powershell
 git clone https://github.com/Brentador/NSTS.git
-cd NSTS
+
+Navigate to the directory where you cloned the NSTS project (e.g., C:\path\to\NSTS):
+cd C:\path\to\NSTS
 cd src
 ```
 
@@ -28,9 +30,6 @@ cd src
 ```powershell
 Import-Module .\NSTS.psm1
 ```
-
-> **Note:** You only need to import the module once per PowerShell session.
-
 ---
 
 ## Quick Start
